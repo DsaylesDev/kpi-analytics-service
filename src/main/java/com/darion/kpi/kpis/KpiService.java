@@ -23,9 +23,10 @@ public class KpiService {
         this.mapper = mapper;
     }
 
+    // KPI #1: Donut (event counts by type)
     public List<DonutSliceDTO> eventTypeBreakdown(Instant from, Instant to, String siteId) {
         try {
-            String body = buildAggQuery(from, to, siteId);
+            String body = buildEventTypeBreakdownQuery(from, to, siteId);
 
             Request req = new Request("POST", "/warehouse_events/_search");
             req.setJsonEntity(body);
@@ -51,12 +52,48 @@ public class KpiService {
                 }
                 return out;
             }
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to compute event type breakdown", e);
         }
     }
 
-    private String buildAggQuery(Instant from, Instant to, String siteId) {
+    // KPI #2: Events per hour (date_histogram)
+    public List<HourlyCountDTO> eventsPerHour(Instant from, Instant to, String siteId) {
+        try {
+            String body = buildEventsPerHourQuery(from, to, siteId);
+
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(body);
+
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+
+                JsonNode buckets = root.path("aggregations")
+                        .path("events_per_hour")
+                        .path("buckets");
+
+                List<HourlyCountDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String hour = b.path("key_as_string").asText(null);
+                        long count = b.path("doc_count").asLong(0);
+                        if (hour != null) {
+                            out.add(new HourlyCountDTO(hour, count));
+                        }
+                    }
+                }
+                return out;
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute events per hour", e);
+        }
+    }
+
+    private String buildEventTypeBreakdownQuery(Instant from, Instant to, String siteId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         sb.append("\"size\":0,");
@@ -75,6 +112,35 @@ public class KpiService {
         sb.append("\"aggs\":{");
         sb.append("\"by_event_type\":{");
         sb.append("\"terms\":{\"field\":\"eventType\",\"size\":25}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private String buildEventsPerHourQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"size\":0,");
+        sb.append("\"query\":{");
+        sb.append("\"bool\":{");
+        sb.append("\"filter\":[");
+        sb.append("{\"range\":{\"timestamp\":{\"gte\":\"").append(from).append("\",\"lte\":\"").append(to).append("\"}}}");
+
+        if (siteId != null && !siteId.isBlank()) {
+            sb.append(",{\"term\":{\"siteId\":\"").append(escapeJson(siteId)).append("\"}}");
+        }
+
+        sb.append("]");
+        sb.append("}");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"events_per_hour\":{");
+        sb.append("\"date_histogram\":{");
+        sb.append("\"field\":\"timestamp\",");
+        sb.append("\"fixed_interval\":\"1h\",");
+        sb.append("\"min_doc_count\":0");
+        sb.append("}");
         sb.append("}");
         sb.append("}");
         sb.append("}");
