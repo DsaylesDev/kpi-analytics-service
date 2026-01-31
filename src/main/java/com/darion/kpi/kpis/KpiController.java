@@ -23,5 +23,14 @@ public class KpiController {
     ) {
         return service.eventTypeBreakdown(Instant.parse(from), Instant.parse(to), siteId);
     }
+    @GetMapping("/events-per-hour")
+    public List<HourlyCountDTO> eventsPerHour(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam(required = false) String siteId
+    ) {
+        return service.eventsPerHour(Instant.parse(from), Instant.parse(to), siteId);
+    }
+
 }
 
