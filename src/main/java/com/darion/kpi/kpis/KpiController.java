@@ -31,6 +31,15 @@ public class KpiController {
     ) {
         return service.eventsPerHour(Instant.parse(from), Instant.parse(to), siteId);
     }
+    @GetMapping("/success-rate")
+    public SuccessRateDTO successRate(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam(required = false) String siteId
+    ) {
+        return service.successRate(Instant.parse(from), Instant.parse(to), siteId);
+    }
+
 
 }
 
