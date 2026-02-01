@@ -150,4 +150,55 @@ public class KpiService {
     private String escapeJson(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
+    public SuccessRateDTO successRate(Instant from, Instant to, String siteId) {
+        try {
+            String body = buildSuccessRateQuery(from, to, siteId);
+
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(body);
+
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+
+                long total = root.path("hits").path("total").path("value").asLong(0);
+                long success = root.path("aggregations")
+                        .path("successful_events")
+                        .path("doc_count")
+                        .asLong(0);
+
+                double rate = total == 0 ? 0.0 : (success * 100.0) / total;
+                return new SuccessRateDTO(total, success, Math.round(rate * 100.0) / 100.0);
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute success rate KPI", e);
+        }
+    }
+    private String buildSuccessRateQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"query\":{");
+        sb.append("\"bool\":{");
+        sb.append("\"filter\":[");
+        sb.append("{\"range\":{\"timestamp\":{\"gte\":\"").append(from).append("\",\"lte\":\"").append(to).append("\"}}}");
+
+        if (siteId != null && !siteId.isBlank()) {
+            sb.append(",{\"term\":{\"siteId\":\"").append(escapeJson(siteId)).append("\"}}");
+        }
+
+        sb.append("]");
+        sb.append("}");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"successful_events\":{");
+        sb.append("\"filter\":{\"term\":{\"success\":true}}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        return sb.toString();
+    }
+
+
 }
