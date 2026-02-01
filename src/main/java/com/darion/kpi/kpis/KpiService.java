@@ -199,6 +199,78 @@ public class KpiService {
         sb.append("}");
         return sb.toString();
     }
+    public List<LeaderboardEntryDTO> topActors(
+            Instant from,
+            Instant to,
+            String siteId,
+            int limit
+    ) {
+        try {
+            String body = buildTopActorsQuery(from, to, siteId, limit);
+
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(body);
+
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+
+                JsonNode buckets = root.path("aggregations")
+                        .path("top_actors")
+                        .path("buckets");
+
+                List<LeaderboardEntryDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String actorId = b.path("key").asText(null);
+                        long count = b.path("doc_count").asLong(0);
+                        if (actorId != null) {
+                            out.add(new LeaderboardEntryDTO(actorId, count));
+                        }
+                    }
+                }
+                return out;
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute top actors leaderboard", e);
+        }
+    }
+    private String buildTopActorsQuery(
+            Instant from,
+            Instant to,
+            String siteId,
+            int limit
+    ) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"size\":0,");
+        sb.append("\"query\":{");
+        sb.append("\"bool\":{");
+        sb.append("\"filter\":[");
+        sb.append("{\"range\":{\"timestamp\":{\"gte\":\"").append(from).append("\",\"lte\":\"").append(to).append("\"}}}");
+
+        if (siteId != null && !siteId.isBlank()) {
+            sb.append(",{\"term\":{\"siteId\":\"").append(escapeJson(siteId)).append("\"}}");
+        }
+
+        sb.append("]");
+        sb.append("}");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"top_actors\":{");
+        sb.append("\"terms\":{");
+        sb.append("\"field\":\"actorId\",");
+        sb.append("\"size\":").append(limit).append(",");
+        sb.append("\"order\":{\"_count\":\"desc\"}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        return sb.toString();
+    }
+
 
 
 }

@@ -39,6 +39,20 @@ public class KpiController {
     ) {
         return service.successRate(Instant.parse(from), Instant.parse(to), siteId);
     }
+    @GetMapping("/leaderboard/top-actors")
+    public List<LeaderboardEntryDTO> topActors(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam(required = false) String siteId,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return service.topActors(
+                Instant.parse(from),
+                Instant.parse(to),
+                siteId,
+                limit
+        );
+    }
 
 
 }
