@@ -53,6 +53,14 @@ public class KpiController {
                 limit
         );
     }
+    @GetMapping("/events-per-hour/by-type")
+    public List<HourlyStackedDTO> eventsPerHourByType(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam(required = false) String siteId
+    ) {
+        return service.eventsPerHourByType(Instant.parse(from), Instant.parse(to), siteId);
+    }
 
 
 }
