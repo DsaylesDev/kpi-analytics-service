@@ -270,6 +270,91 @@ public class KpiService {
         sb.append("}");
         return sb.toString();
     }
+    public List<HourlyStackedDTO> eventsPerHourByType(Instant from, Instant to, String siteId) {
+        try {
+            String body = buildEventsPerHourByTypeQuery(from, to, siteId);
+
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(body);
+
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+
+                JsonNode hourBuckets = root.path("aggregations")
+                        .path("events_per_hour")
+                        .path("buckets");
+
+                List<HourlyStackedDTO> out = new ArrayList<>();
+
+                if (hourBuckets.isArray()) {
+                    for (JsonNode hb : hourBuckets) {
+                        String hour = hb.path("key_as_string").asText(null);
+                        long total = hb.path("doc_count").asLong(0);
+
+                        List<DonutSliceDTO> byType = new ArrayList<>();
+                        JsonNode typeBuckets = hb.path("by_type").path("buckets");
+                        if (typeBuckets.isArray()) {
+                            for (JsonNode tb : typeBuckets) {
+                                String label = tb.path("key").asText(null);
+                                long count = tb.path("doc_count").asLong(0);
+                                if (label != null) {
+                                    byType.add(new DonutSliceDTO(label, count));
+                                }
+                            }
+                        }
+
+                        if (hour != null) {
+                            out.add(new HourlyStackedDTO(hour, total, byType));
+                        }
+                    }
+                }
+
+                return out;
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute events per hour by type", e);
+        }
+    }
+    private String buildEventsPerHourByTypeQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"size\":0,");
+        sb.append("\"query\":{");
+        sb.append("\"bool\":{");
+        sb.append("\"filter\":[");
+        sb.append("{\"range\":{\"timestamp\":{\"gte\":\"").append(from).append("\",\"lte\":\"").append(to).append("\"}}}");
+
+        if (siteId != null && !siteId.isBlank()) {
+            sb.append(",{\"term\":{\"siteId\":\"").append(escapeJson(siteId)).append("\"}}");
+        }
+
+        sb.append("]");
+        sb.append("}");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"events_per_hour\":{");
+        sb.append("\"date_histogram\":{");
+        sb.append("\"field\":\"timestamp\",");
+        sb.append("\"fixed_interval\":\"1h\",");
+        sb.append("\"min_doc_count\":0");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"by_type\":{");
+        sb.append("\"terms\":{");
+        sb.append("\"field\":\"eventType\",");
+        sb.append("\"size\":25,");
+        sb.append("\"order\":{\"_count\":\"desc\"}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        return sb.toString();
+    }
 
 
 
