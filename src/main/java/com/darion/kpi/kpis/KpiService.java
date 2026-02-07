@@ -355,7 +355,78 @@ public class KpiService {
         sb.append("}");
         return sb.toString();
     }
+    public List<HourlyErrorRateDTO> errorRatePerHour(Instant from, Instant to, String siteId) {
+        try {
+            String body = buildErrorRatePerHourQuery(from, to, siteId);
 
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(body);
 
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+
+                JsonNode hourBuckets = root.path("aggregations")
+                        .path("errors_per_hour")
+                        .path("buckets");
+
+                List<HourlyErrorRateDTO> out = new ArrayList<>();
+
+                if (hourBuckets.isArray()) {
+                    for (JsonNode hb : hourBuckets) {
+                        String hour = hb.path("key_as_string").asText(null);
+                        long total = hb.path("doc_count").asLong(0);
+                        long errors = hb.path("errors_only").path("doc_count").asLong(0);
+
+                        double rate = total == 0 ? 0.0 : (errors * 100.0) / total;
+                        rate = Math.round(rate * 100.0) / 100.0; // 2 decimals
+
+                        if (hour != null) {
+                            out.add(new HourlyErrorRateDTO(hour, total, errors, rate));
+                        }
+                    }
+                }
+
+                return out;
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute error rate per hour", e);
+        }
+    }
+    private String buildErrorRatePerHourQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"size\":0,");
+        sb.append("\"query\":{");
+        sb.append("\"bool\":{");
+        sb.append("\"filter\":[");
+        sb.append("{\"range\":{\"timestamp\":{\"gte\":\"").append(from).append("\",\"lte\":\"").append(to).append("\"}}}");
+
+        if (siteId != null && !siteId.isBlank()) {
+            sb.append(",{\"term\":{\"siteId\":\"").append(escapeJson(siteId)).append("\"}}");
+        }
+
+        sb.append("]");
+        sb.append("}");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"errors_per_hour\":{");
+        sb.append("\"date_histogram\":{");
+        sb.append("\"field\":\"timestamp\",");
+        sb.append("\"fixed_interval\":\"1h\",");
+        sb.append("\"min_doc_count\":0");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"errors_only\":{");
+        sb.append("\"filter\":{\"term\":{\"success\":false}}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        return sb.toString();
+    }
 
 }
