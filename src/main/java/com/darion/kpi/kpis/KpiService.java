@@ -428,5 +428,82 @@ public class KpiService {
         sb.append("}");
         return sb.toString();
     }
+    public List<HourlyDurationStatsDTO> durationStatsPerHour(Instant from, Instant to, String siteId) {
+        try {
+            String body = buildDurationStatsPerHourQuery(from, to, siteId);
+
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(body);
+
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+
+                JsonNode hourBuckets = root.path("aggregations")
+                        .path("duration_per_hour")
+                        .path("buckets");
+
+                List<HourlyDurationStatsDTO> out = new ArrayList<>();
+
+                if (hourBuckets.isArray()) {
+                    for (JsonNode hb : hourBuckets) {
+                        String hour = hb.path("key_as_string").asText(null);
+
+                        double avg = hb.path("avg_duration").path("value").asDouble(0.0);
+
+                        // percentiles response is an object: { "values": { "95.0": 1234.0 } }
+                        JsonNode p95Node = hb.path("p95_duration").path("values").path("95.0");
+                        double p95 = p95Node.isMissingNode() || p95Node.isNull() ? 0.0 : p95Node.asDouble(0.0);
+
+                        // round to 2 decimals for nicer output
+                        avg = Math.round(avg * 100.0) / 100.0;
+                        p95 = Math.round(p95 * 100.0) / 100.0;
+
+                        if (hour != null) {
+                            out.add(new HourlyDurationStatsDTO(hour, avg, p95));
+                        }
+                    }
+                }
+
+                return out;
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute duration stats per hour", e);
+        }
+    }
+    private String buildDurationStatsPerHourQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"size\":0,");
+        sb.append("\"query\":{");
+        sb.append("\"bool\":{");
+        sb.append("\"filter\":[");
+        sb.append("{\"range\":{\"timestamp\":{\"gte\":\"").append(from).append("\",\"lte\":\"").append(to).append("\"}}}");
+
+        if (siteId != null && !siteId.isBlank()) {
+            sb.append(",{\"term\":{\"siteId\":\"").append(escapeJson(siteId)).append("\"}}");
+        }
+
+        sb.append("]");
+        sb.append("}");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"duration_per_hour\":{");
+        sb.append("\"date_histogram\":{");
+        sb.append("\"field\":\"timestamp\",");
+        sb.append("\"fixed_interval\":\"1h\",");
+        sb.append("\"min_doc_count\":0");
+        sb.append("},");
+        sb.append("\"aggs\":{");
+        sb.append("\"avg_duration\":{\"avg\":{\"field\":\"durationMs\"}},");
+        sb.append("\"p95_duration\":{\"percentiles\":{\"field\":\"durationMs\",\"percents\":[95]}}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        sb.append("}");
+        return sb.toString();
+    }
 
 }
