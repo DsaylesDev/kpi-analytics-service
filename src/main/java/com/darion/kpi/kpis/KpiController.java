@@ -69,6 +69,14 @@ public class KpiController {
     ) {
         return service.errorRatePerHour(Instant.parse(from), Instant.parse(to), siteId);
     }
+    @GetMapping("/duration-stats-per-hour")
+    public List<HourlyDurationStatsDTO> durationStatsPerHour(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam(required = false) String siteId
+    ) {
+        return service.durationStatsPerHour(Instant.parse(from), Instant.parse(to), siteId);
+    }
 
 
 }
