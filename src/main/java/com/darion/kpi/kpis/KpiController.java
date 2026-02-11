@@ -3,7 +3,6 @@ package com.darion.kpi.kpis;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.util.List;
 
 @RestController
 @RequestMapping("/kpis")
@@ -15,69 +14,22 @@ public class KpiController {
         this.service = service;
     }
 
-    @GetMapping("/event-type-breakdown")
-    public List<DonutSliceDTO> eventTypeBreakdown(
-            @RequestParam String from,
-            @RequestParam String to,
-            @RequestParam(required = false) String siteId
-    ) {
-        return service.eventTypeBreakdown(Instant.parse(from), Instant.parse(to), siteId);
-    }
-    @GetMapping("/events-per-hour")
-    public List<HourlyCountDTO> eventsPerHour(
-            @RequestParam String from,
-            @RequestParam String to,
-            @RequestParam(required = false) String siteId
-    ) {
-        return service.eventsPerHour(Instant.parse(from), Instant.parse(to), siteId);
-    }
-    @GetMapping("/success-rate")
-    public SuccessRateDTO successRate(
-            @RequestParam String from,
-            @RequestParam String to,
-            @RequestParam(required = false) String siteId
-    ) {
-        return service.successRate(Instant.parse(from), Instant.parse(to), siteId);
-    }
-    @GetMapping("/leaderboard/top-actors")
-    public List<LeaderboardEntryDTO> topActors(
+    @GetMapping("/{id}")
+    public Object getKpi(
+            @PathVariable KpiId id,
             @RequestParam String from,
             @RequestParam String to,
             @RequestParam(required = false) String siteId,
-            @RequestParam(defaultValue = "10") int limit
+            @RequestParam(required = false) Integer topN,
+            @RequestParam(required = false) Integer limit
     ) {
-        return service.topActors(
+        KpiRequest req = new KpiRequest(
                 Instant.parse(from),
                 Instant.parse(to),
                 siteId,
+                topN,
                 limit
         );
+        return service.getKpi(id, req);
     }
-    @GetMapping("/events-per-hour/by-type")
-    public List<HourlyStackedDTO> eventsPerHourByType(
-            @RequestParam String from,
-            @RequestParam String to,
-            @RequestParam(required = false) String siteId
-    ) {
-        return service.eventsPerHourByType(Instant.parse(from), Instant.parse(to), siteId);
-    }
-    @GetMapping("/error-rate-per-hour")
-    public List<HourlyErrorRateDTO> errorRatePerHour(
-            @RequestParam String from,
-            @RequestParam String to,
-            @RequestParam(required = false) String siteId
-    ) {
-        return service.errorRatePerHour(Instant.parse(from), Instant.parse(to), siteId);
-    }
-    @GetMapping("/duration-stats-per-hour")
-    public List<HourlyDurationStatsDTO> durationStatsPerHour(
-            @RequestParam String from,
-            @RequestParam String to,
-            @RequestParam(required = false) String siteId
-    ) {
-        return service.durationStatsPerHour(Instant.parse(from), Instant.parse(to), siteId);
-    }
-
-
 }
-

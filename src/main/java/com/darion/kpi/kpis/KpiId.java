@@ -1,0 +1,11 @@
+package com.darion.kpi.kpis;
+
+public enum KpiId {
+    EVENT_TYPE_BREAKDOWN,
+    EVENTS_PER_HOUR,
+    EVENTS_PER_HOUR_BY_TYPE,
+    ERROR_RATE_PER_HOUR,
+    DURATION_STATS_PER_HOUR,
+    SUCCESS_RATE,
+    TOP_ACTORS
+}
