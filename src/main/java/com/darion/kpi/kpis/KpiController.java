@@ -11,10 +11,12 @@ public class KpiController {
 
     private final KpiService service;
     private final KpiRegistry registry;
+    private final KpiRequestNormalizer normalizer;
 
-    public KpiController(KpiService service, KpiRegistry registry) {
+    public KpiController(KpiService service, KpiRegistry registry, KpiRequestNormalizer normalizer) {
         this.service = service;
         this.registry = registry;
+        this.normalizer = normalizer;
     }
 
     @GetMapping("/{id}")
@@ -33,11 +35,12 @@ public class KpiController {
                 topN,
                 limit
         );
-        return service.getKpi(id, req);
+
+        return service.getKpi(id, normalizer.normalize(req));
     }
+
     @GetMapping("/definitions")
     public List<KpiDefinition> definitions() {
         return registry.listAll();
-
     }
 }
