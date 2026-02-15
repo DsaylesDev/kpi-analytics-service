@@ -39,6 +39,10 @@ public class KpiServiceImpl implements KpiService {
                 int limit = req.limit() == null ? 10 : req.limit();
                 yield es.topActors(req.from(), req.to(), req.siteId(), limit);
             }
+
+            case SITE_VOLUME_AND_SUCCESS ->  {
+                es.siteVolumeAndSuccess(req.from(), req.to(), req.siteId());
+            }
         };
     }
 }
