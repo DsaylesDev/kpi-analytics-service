@@ -294,6 +294,45 @@ public class EsKpiQueryClient {
         } catch (Exception e) {
             throw new RuntimeException("Failed SITE_VOLUME_AND_SUCCESS KPI", e);
         }
+
+    }
+    public List<HourlyUniqueCountDTO> uniqueActorsPerHour(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildUniqueActorsPerHourQuery(from, to, siteId));
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("per_hour").path("buckets");
+
+                List<HourlyUniqueCountDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String hour = b.path("key_as_string").asText(null);
+                        long unique = b.path("unique_actors").path("value").asLong(0);
+                        if (hour != null) out.add(new HourlyUniqueCountDTO(hour, unique));
+                    }
+                }
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed UNIQUE_ACTORS_PER_HOUR KPI", e);
+        }
+    }
+
+    private String buildUniqueActorsPerHourQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"per_hour\":{");
+        sb.append("\"date_histogram\":{\"field\":\"timestamp\",\"fixed_interval\":\"1h\",\"min_doc_count\":0},");
+        sb.append("\"aggs\":{\"unique_actors\":{\"cardinality\":{\"field\":\"actorId\"}}}");
+        sb.append("}}}");
+        return sb.toString();
     }
 
     private String buildSiteVolumeAndSuccessQuery(Instant from, Instant to, String siteId) {
@@ -398,8 +437,6 @@ public class EsKpiQueryClient {
         sb.append("\"aggs\":{\"top_actors\":{\"terms\":{\"field\":\"actorId\",\"size\":").append(limit).append(",\"order\":{\"_count\":\"desc\"}}}}}");
         return sb.toString();
     }
-
-    // ===================== tiny helpers =====================
 
     private boolean hasText(String s) {
         return s != null && !s.isBlank();

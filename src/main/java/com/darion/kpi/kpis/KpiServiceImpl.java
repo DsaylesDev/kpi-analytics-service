@@ -43,6 +43,9 @@ public class KpiServiceImpl implements KpiService {
             case SITE_VOLUME_AND_SUCCESS ->  {
                 es.siteVolumeAndSuccess(req.from(), req.to(), req.siteId());
             }
+            case UNIQUE_ACTORS_PER_HOUR -> {
+                es.uniqueActorsPerHour(req.from(), req.to(), req.siteId());
+            }
         };
     }
 }
