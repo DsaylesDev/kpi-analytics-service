@@ -320,6 +320,45 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed UNIQUE_ACTORS_PER_HOUR KPI", e);
         }
     }
+    public List<HourlyUniqueSessionsDTO> uniqueSessionsPerHour(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildUniqueSessionsPerHourQuery(from, to, siteId));
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("per_hour").path("buckets");
+
+                List<HourlyUniqueSessionsDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String hour = b.path("key_as_string").asText(null);
+                        long unique = b.path("unique_sessions").path("value").asLong(0);
+                        if (hour != null) out.add(new HourlyUniqueSessionsDTO(hour, unique));
+                    }
+                }
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed UNIQUE_SESSIONS_PER_HOUR KPI", e);
+        }
+    }
+
+    private String buildUniqueSessionsPerHourQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"per_hour\":{");
+        sb.append("\"date_histogram\":{\"field\":\"timestamp\",\"fixed_interval\":\"1h\",\"min_doc_count\":0},");
+        sb.append("\"aggs\":{\"unique_sessions\":{\"cardinality\":{\"field\":\"sessionId\"}}}");
+        sb.append("}}}");
+        return sb.toString();
+    }
+
 
     private String buildUniqueActorsPerHourQuery(Instant from, Instant to, String siteId) {
         StringBuilder sb = new StringBuilder();
