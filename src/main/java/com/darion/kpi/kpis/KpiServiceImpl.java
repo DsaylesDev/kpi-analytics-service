@@ -51,6 +51,9 @@ public class KpiServiceImpl implements KpiService {
             case UNIQUE_SESSIONS_PER_HOUR ->
                 es.uniqueSessionsPerHour(req.from(), req.to(), req.siteId());
 
+            case SUCCESS_RATE_BY_EVENT_TYPE ->
+                    es.successRateByEventType(req.from(), req.to(), req.siteId());
+
         };
     }
 }

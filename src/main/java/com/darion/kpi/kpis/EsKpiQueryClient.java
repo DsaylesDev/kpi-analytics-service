@@ -344,6 +344,47 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed UNIQUE_SESSIONS_PER_HOUR KPI", e);
         }
     }
+    public List<EventTypeSuccessDTO> successRateByEventType(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildSuccessRateByEventTypeQuery(from, to, siteId));
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("by_type").path("buckets");
+
+                List<EventTypeSuccessDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String type = b.path("key").asText(null);
+                        long total = b.path("doc_count").asLong(0);
+                        long success = b.path("success_only").path("doc_count").asLong(0);
+                        double rate = total == 0 ? 0.0 : (success * 100.0) / total;
+                        rate = Math.round(rate * 100.0) / 100.0;
+                        if (type != null) out.add(new EventTypeSuccessDTO(type, total, success, rate));
+                    }
+                }
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed SUCCESS_RATE_BY_EVENT_TYPE KPI", e);
+        }
+    }
+
+    private String buildSuccessRateByEventTypeQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"by_type\":{");
+        sb.append("\"terms\":{\"field\":\"eventType\",\"size\":25,\"order\":{\"_count\":\"desc\"}},");
+        sb.append("\"aggs\":{\"success_only\":{\"filter\":{\"term\":{\"success\":true}}}}");
+        sb.append("}}}");
+        return sb.toString();
+    }
 
     private String buildUniqueSessionsPerHourQuery(Instant from, Instant to, String siteId) {
         StringBuilder sb = new StringBuilder();
