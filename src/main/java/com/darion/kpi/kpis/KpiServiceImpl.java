@@ -54,6 +54,9 @@ public class KpiServiceImpl implements KpiService {
             case SUCCESS_RATE_BY_EVENT_TYPE ->
                     es.successRateByEventType(req.from(), req.to(), req.siteId());
 
+            case DURATION_STATS_BY_EVENT_TYPE ->
+                    es.durationStatsByEventType(req.from(), req.to(), req.siteId());
+
         };
     }
 }

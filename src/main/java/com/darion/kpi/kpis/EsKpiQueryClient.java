@@ -371,6 +371,51 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed SUCCESS_RATE_BY_EVENT_TYPE KPI", e);
         }
     }
+    public List<EventTypeDurationStatsDTO> durationStatsByEventType(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildDurationStatsByEventTypeQuery(from, to, siteId));
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("by_type").path("buckets");
+
+                List<EventTypeDurationStatsDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String type = b.path("key").asText(null);
+                        double avg = b.path("avg_duration").path("value").asDouble(0.0);
+                        JsonNode p95Node = b.path("p95_duration").path("values").path("95.0");
+                        double p95 = (p95Node.isMissingNode() || p95Node.isNull()) ? 0.0 : p95Node.asDouble(0.0);
+                        avg = Math.round(avg * 100.0) / 100.0;
+                        p95 = Math.round(p95 * 100.0) / 100.0;
+                        if (type != null) out.add(new EventTypeDurationStatsDTO(type, avg, p95));
+                    }
+                }
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed DURATION_STATS_BY_EVENT_TYPE KPI", e);
+        }
+    }
+
+    private String buildDurationStatsByEventTypeQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"by_type\":{");
+        sb.append("\"terms\":{\"field\":\"eventType\",\"size\":25,\"order\":{\"_count\":\"desc\"}},");
+        sb.append("\"aggs\":{");
+        sb.append("\"avg_duration\":{\"avg\":{\"field\":\"durationMs\"}},");
+        sb.append("\"p95_duration\":{\"percentiles\":{\"field\":\"durationMs\",\"percents\":[95]}}");
+        sb.append("}}}}");
+        return sb.toString();
+    }
+
 
     private String buildSuccessRateByEventTypeQuery(Instant from, Instant to, String siteId) {
         StringBuilder sb = new StringBuilder();
