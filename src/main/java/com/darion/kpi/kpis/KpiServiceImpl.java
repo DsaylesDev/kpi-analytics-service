@@ -57,6 +57,10 @@ public class KpiServiceImpl implements KpiService {
             case DURATION_STATS_BY_EVENT_TYPE ->
                     es.durationStatsByEventType(req.from(), req.to(), req.siteId());
 
+            case TOP_SESSIONS_BY_EVENT_COUNT ->{
+                int limit = req.limit() == null ? 10 : req.limit();
+                yield es.topSessionsByEventCount(req.from(), req.to(), req.siteId(), limit);
+            }
         };
     }
 }

@@ -371,6 +371,43 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed SUCCESS_RATE_BY_EVENT_TYPE KPI", e);
         }
     }
+    public List<SessionCountDTO> topSessionsByEventCount(Instant from, Instant to, String siteId, int limit) {
+        try {
+            if (limit < 1) limit = 1;
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildTopSessionsByEventCountQuery(from, to, siteId, limit));
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("top_sessions").path("buckets");
+
+                List<SessionCountDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String s = b.path("key").asText(null);
+                        long c = b.path("doc_count").asLong(0);
+                        if (s != null) out.add(new SessionCountDTO(s, c));
+                    }
+                }
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed TOP_SESSIONS_BY_EVENT_COUNT KPI", e);
+        }
+    }
+
+    private String buildTopSessionsByEventCountQuery(Instant from, Instant to, String siteId, int limit) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"top_sessions\":{\"terms\":{\"field\":\"sessionId\",\"size\":")
+                .append(limit).append(",\"order\":{\"_count\":\"desc\"}}}}}");
+        return sb.toString();
+    }
     public List<EventTypeDurationStatsDTO> durationStatsByEventType(Instant from, Instant to, String siteId) {
         try {
             Request req = new Request("POST", "/warehouse_events/_search");
