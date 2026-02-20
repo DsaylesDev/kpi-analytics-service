@@ -436,7 +436,43 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed DURATION_STATS_BY_EVENT_TYPE KPI", e);
         }
     }
+    public List<DonutSliceDTO> topEventTypes(Instant from, Instant to, String siteId, int limit) {
+        try {
+            if (limit < 1) limit = 1;
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildTopEventTypesQuery(from, to, siteId, limit));
+            Response resp = restClient.performRequest(req);
 
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("top_types").path("buckets");
+
+                List<DonutSliceDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String k = b.path("key").asText(null);
+                        long c = b.path("doc_count").asLong(0);
+                        if (k != null) out.add(new DonutSliceDTO(k, c));
+                    }
+                }
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed TOP_EVENT_TYPES KPI", e);
+        }
+    }
+
+    private String buildTopEventTypesQuery(Instant from, Instant to, String siteId, int limit) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"top_types\":{\"terms\":{\"field\":\"eventType\",\"size\":")
+                .append(limit).append(",\"order\":{\"_count\":\"desc\"}}}}}");
+        return sb.toString();
+    }
     private String buildDurationStatsByEventTypeQuery(Instant from, Instant to, String siteId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"size\":0,");

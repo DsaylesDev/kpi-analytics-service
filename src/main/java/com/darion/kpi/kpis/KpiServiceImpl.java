@@ -61,6 +61,10 @@ public class KpiServiceImpl implements KpiService {
                 int limit = req.limit() == null ? 10 : req.limit();
                 yield es.topSessionsByEventCount(req.from(), req.to(), req.siteId(), limit);
             }
+            case TOP_EVENT_TYPES -> {
+                int limit = req.limit() == null ? 10 : req.limit();
+                yield es.topEventTypes(req.from(), req.to(), req.siteId(), limit);
+            }
         };
     }
 }
