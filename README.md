@@ -1,134 +1,231 @@
 # KPI Analytics Service
 
-A Spring Boot–based analytics service backed by Elasticsearch that ingests warehouse-style event data and exposes multiple KPI endpoints for operational dashboards.
+A Spring Boot analytics backend that computes real-time KPIs from warehouse event data stored in Elasticsearch.
 
-This project was built to demonstrate backend ownership of:
-- Event ingestion
-- Time-based aggregations
-- Operational KPIs (volume, quality, reliability)
-- Elasticsearch-backed analytics APIs
+This project is intentionally designed using a production-style architecture similar to enterprise Warehouse Execution Systems (WES):
 
----
-
-## What This Service Does
-
-The service accepts raw event data (e.g. PICK, PACK, SORT, ERROR) and computes analytics over a time range, optionally scoped by site.
-
-It exposes REST endpoints designed to be consumed by dashboards (charts, KPIs, leaderboards).
+- Enum-driven KPI routing
+- Switch-based service dispatch
+- Dedicated Elasticsearch query client
+- Request normalization + validation
+- Clean separation of concerns
+- Extensible KPI registry
 
 ---
 
-## Event Model (Simplified)
+## 🚀 Architecture Overview
+HTTP Request
+↓
+KpiController
+↓
+KpiRequestNormalizer
+↓
+KpiService (interface)
+↓
+KpiServiceImpl (switch-based routing)
+↓
+EsKpiQueryClient (Elasticsearch queries)
+↓
+Elasticsearch
 
-Each event represents an operational action and includes:
+### Design Goals
 
-- `timestamp` – when the event occurred
-- `eventType` – type of action (PICK, PACK, SORT, ERROR, etc.)
-- `sessionId` – logical session or workflow
-- `actorId` – user or robot that generated the event
-- `siteId` – warehouse/site identifier
-- `durationMs` – execution time
-- `success` – whether the event completed successfully
-
-Events are stored in Elasticsearch and queried using aggregations.
-
----
-
-## Implemented KPIs
-
-### 1. Event Type Breakdown (Donut)
-**Endpoint**
-
-**Description**
-Aggregates events by `eventType` to show distribution of activity.
-
-**Use case**
-Quick overview of operational mix (PICK vs PACK vs ERROR).
+- Single unified KPI endpoint (`/kpis/{KPI_ID}`)
+- Enum-based routing (ALL_CAPS IDs)
+- Switch-driven service pattern (enterprise style)
+- Dedicated Elasticsearch aggregation layer
+- Immutable DTO responses (Java records)
+- Safe request validation and normalization
 
 ---
 
-### 2. Events Per Hour
-**Endpoint**
+## 🛠 Tech Stack
 
-**Description**
-Buckets events into hourly intervals using a date histogram.
-
-**Use case**
-Visualize workload volume over time.
-
----
-
-### 3. Stacked Events Per Hour by Type
-**Endpoint**
-
-**Description**
-Hourly buckets with sub-buckets per `eventType`. Supports `topN` filtering with an `OTHER` bucket.
-
-**Use case**
-Stacked bar charts for operational dashboards.
+- Java 21
+- Spring Boot 3.4.x
+- Elasticsearch 8.x
+- Jackson
+- Maven
+- Docker (for local ES)
 
 ---
 
-### 4. Error Rate Per Hour
-**Endpoint**
+## 🏃 Running Locally
 
-**Description**
-Calculates error count and error percentage per hour using filtered aggregations.
+### 1️⃣ Start Elasticsearch (Docker)
 
-**Use case**
-Reliability monitoring and incident analysis.
-
----
-
-### 5. Duration Metrics Per Hour (Avg + P95)
-**Endpoint**
-
-**Description**
-Computes average and 95th percentile execution time per hour.
-
-**Use case**
-Performance and latency analysis.
-
----
-
-### 6. Success Rate KPI
-**Endpoint**
-
-**Description**
-Returns total events, successful events, and overall success percentage.
-
-**Use case**
-High-level system health indicator.
-
----
-
-### 7. Top Actors Leaderboard
-**Endpoint**
-
-**Description**
-Ranks users/robots by event volume within a time window.
-
-**Use case**
-Identify high-activity actors or automation hotspots.
-
----
-
-## Technology Stack
-
-- **Java 21**
-- **Spring Boot 3.4**
-- **Elasticsearch 8.x**
-- **Jackson** for JSON parsing
-- **Docker** for local Elasticsearch
-
-The KPI queries are executed using Elasticsearch `_search` requests with aggregations and parsed directly for stability and version compatibility.
-
----
-
-## Running Locally
-
-### 1. Start Elasticsearch
 ```bash
-docker compose up -d
-http://localhost:9200
+docker run -d \
+  --name es \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+
+Verify it is running:
+curl http://localhost:9200
+
+2️⃣ Run the Spring Boot App
+mvn spring-boot:run
+
+Application runs on:
 http://localhost:8080
+
+📥 Ingesting Sample Events
+
+Example PowerShell request:
+$body = @{
+  timestamp  = "2026-01-15T16:00:00Z"
+  eventType  = "PICK"
+  sessionId  = "sess-1001"
+  actorId    = "user-12"
+  siteId     = "PHL1"
+  durationMs = 1830
+  success    = $true
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8080/events" `
+  -ContentType "application/json" `
+  -Body $body
+
+📊 Calling KPIs
+
+Unified endpoint:
+GET /kpis/{KPI_ID}
+
+Example:
+curl "http://localhost:8080/kpis/EVENTS_PER_HOUR?from=2026-01-15T15:00:00Z&to=2026-01-15T19:00:00Z&siteId=PHL1"
+
+🔎 Required Parameters
+| Parameter | Type             | Required |
+| --------- | ---------------- | -------- |
+| from      | ISO-8601 Instant | Yes      |
+| to        | ISO-8601 Instant | Yes      |
+| siteId    | String           | No       |
+| topN      | Integer          | No       |
+| limit     | Integer          | No       |
+
+📈 Available KPIs
+Core Analytics
+
+EVENT_TYPE_BREAKDOWN
+
+EVENTS_PER_HOUR
+
+EVENTS_PER_HOUR_BY_TYPE
+
+ERROR_RATE_PER_HOUR
+
+DURATION_STATS_PER_HOUR
+
+SUCCESS_RATE
+
+TOP_ACTORS
+
+Advanced KPIs
+
+SITE_VOLUME_AND_SUCCESS
+
+UNIQUE_ACTORS_PER_HOUR
+
+UNIQUE_SESSIONS_PER_HOUR
+
+SUCCESS_RATE_BY_EVENT_TYPE
+
+DURATION_STATS_BY_EVENT_TYPE
+
+TOP_SESSIONS_BY_EVENT_COUNT
+
+TOP_EVENT_TYPES
+
+THROUGHPUT_PER_MINUTE
+
+ERROR_TYPES_BREAKDOWN
+
+TOP_LONGEST_EVENTS
+
+ACTOR_ACTIVITY_SUMMARY
+
+📚 KPI Definitions Endpoint
+
+Retrieve metadata for all KPIs:
+GET /kpis/definitions
+
+Example response:
+[
+  {
+    "id": "EVENT_TYPE_BREAKDOWN",
+    "displayName": "Event Type Breakdown",
+    "description": "Distribution of events grouped by type.",
+    "chartType": "DONUT"
+  }
+]
+
+🛡 Request Validation
+
+All KPI requests pass through KpiRequestNormalizer, which:
+
+Validates from < to
+
+Prevents excessive time ranges
+
+Applies safe defaults
+
+Clamps topN and limit
+
+Returns clean HTTP 400 errors for invalid requests
+
+Example invalid request:
+/kpis/EVENTS_PER_HOUR?from=2026-01-02T00:00:00Z&to=2026-01-01T00:00:00Z
+
+Returns:
+{
+  "status": 400,
+  "error": "Bad Request",
+  "message": "'from' must be before 'to'"
+}
+
+📁 Project Structure
+kpis/
+ ├── KpiController
+ ├── KpiService
+ ├── KpiServiceImpl
+ ├── KpiId
+ ├── KpiRegistry
+ ├── KpiRequest
+ ├── KpiRequestNormalizer
+ ├── EsKpiQueryClient
+ ├── DTO records
+
+🧠 Why This Architecture?
+
+This service mirrors enterprise analytics systems by:
+
+Centralizing KPI routing
+
+Separating HTTP, business logic, and data layers
+
+Using Elasticsearch aggregations efficiently
+
+Supporting extensible KPI definitions
+
+Enabling daily KPI expansion without architectural change
+
+🔮 Future Improvements
+
+Response caching
+
+Async KPI execution
+
+Strategy pattern (replace switch)
+
+OpenAPI documentation
+
+Integration test suite
+
+Performance benchmarking
+
+Multi-index support
+
+Role-based KPI access
