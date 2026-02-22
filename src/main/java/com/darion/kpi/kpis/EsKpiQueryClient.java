@@ -461,6 +461,41 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed TOP_EVENT_TYPES KPI", e);
         }
     }
+    public List<HourlyCountDTO> throughputPerMinute(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildThroughputPerMinuteQuery(from, to, siteId));
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("per_minute").path("buckets");
+
+                List<HourlyCountDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String t = b.path("key_as_string").asText(null);
+                        long c = b.path("doc_count").asLong(0);
+                        if (t != null) out.add(new HourlyCountDTO(t, c));
+                    }
+                }
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed THROUGHPUT_PER_MINUTE KPI", e);
+        }
+    }
+
+    private String buildThroughputPerMinuteQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"per_minute\":{\"date_histogram\":{\"field\":\"timestamp\",\"fixed_interval\":\"1m\",\"min_doc_count\":0}}}}");
+        return sb.toString();
+    }
 
     private String buildTopEventTypesQuery(Instant from, Instant to, String siteId, int limit) {
         StringBuilder sb = new StringBuilder();

@@ -65,6 +65,8 @@ public class KpiServiceImpl implements KpiService {
                 int limit = req.limit() == null ? 10 : req.limit();
                 yield es.topEventTypes(req.from(), req.to(), req.siteId(), limit);
             }
+            case THROUGHPUT_PER_MINUTE ->
+                    es.throughputPerMinute(req.from(), req.to(), req.siteId());
         };
     }
 }
