@@ -67,6 +67,9 @@ public class KpiServiceImpl implements KpiService {
             }
             case THROUGHPUT_PER_MINUTE ->
                     es.throughputPerMinute(req.from(), req.to(), req.siteId());
+
+            case ERROR_TYPES_BREAKDOWN ->
+                    es.errorTypesBreakdown(req.from(), req.to(), req.siteId());
         };
     }
 }

@@ -485,7 +485,42 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed THROUGHPUT_PER_MINUTE KPI", e);
         }
     }
+    public List<DonutSliceDTO> errorTypesBreakdown(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildErrorTypesBreakdownQuery(from, to, siteId));
+            Response resp = restClient.performRequest(req);
 
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("by_type").path("buckets");
+
+                List<DonutSliceDTO> out = new ArrayList<>();
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String k = b.path("key").asText(null);
+                        long c = b.path("doc_count").asLong(0);
+                        if (k != null) out.add(new DonutSliceDTO(k, c));
+                    }
+                }
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed ERROR_TYPES_BREAKDOWN KPI", e);
+        }
+    }
+
+    private String buildErrorTypesBreakdownQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        sb.append(",{\"term\":{\"success\":false}}");
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"by_type\":{\"terms\":{\"field\":\"eventType\",\"size\":25,\"order\":{\"_count\":\"desc\"}}}}}");
+        return sb.toString();
+    }
     private String buildThroughputPerMinuteQuery(Instant from, Instant to, String siteId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"size\":0,");
