@@ -509,7 +509,88 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed ERROR_TYPES_BREAKDOWN KPI", e);
         }
     }
+    public ActivitySummaryDTO actorActivitySummary(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildActorActivitySummaryQuery(from, to, siteId));
 
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                long total = root.path("hits").path("total").path("value").asLong(0);
+                long actors = root.path("aggregations").path("unique_actors").path("value").asLong(0);
+                long sessions = root.path("aggregations").path("unique_sessions").path("value").asLong(0);
+                return new ActivitySummaryDTO(total, actors, sessions);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed ACTOR_ACTIVITY_SUMMARY KPI", e);
+        }
+    }
+    public List<LongestEventDTO> topLongestEvents(Instant from, Instant to, String siteId, int limit) {
+        try {
+            if (limit < 1) limit = 1;
+
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildTopLongestEventsQuery(from, to, siteId, limit));
+
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode hits = root.path("hits").path("hits");
+
+                List<LongestEventDTO> out = new ArrayList<>();
+                if (hits.isArray()) {
+                    for (JsonNode h : hits) {
+                        String id = h.path("_id").asText(null);
+                        JsonNode src = h.path("_source");
+
+                        out.add(new LongestEventDTO(
+                                id,
+                                src.path("timestamp").asText(null),
+                                src.path("eventType").asText(null),
+                                src.path("sessionId").asText(null),
+                                src.path("actorId").asText(null),
+                                src.path("siteId").asText(null),
+                                src.path("durationMs").asLong(0),
+                                src.path("success").asBoolean(false)
+                        ));
+                    }
+                }
+                return out;
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed TOP_LONGEST_EVENTS KPI", e);
+        }
+    }
+
+    private String buildTopLongestEventsQuery(Instant from, Instant to, String siteId, int limit) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"size\":").append(limit).append(",");
+        sb.append("\"sort\":[{\"durationMs\":{\"order\":\"desc\"}}],");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}}");
+        sb.append("}");
+        return sb.toString();
+    }
+    private String buildActorActivitySummaryQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{");
+        sb.append("\"unique_actors\":{\"cardinality\":{\"field\":\"actorId\"}},");
+        sb.append("\"unique_sessions\":{\"cardinality\":{\"field\":\"sessionId\"}}");
+        sb.append("}}");
+        return sb.toString();
+    }
     private String buildErrorTypesBreakdownQuery(Instant from, Instant to, String siteId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"size\":0,");

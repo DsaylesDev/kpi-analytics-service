@@ -70,6 +70,14 @@ public class KpiServiceImpl implements KpiService {
 
             case ERROR_TYPES_BREAKDOWN ->
                     es.errorTypesBreakdown(req.from(), req.to(), req.siteId());
+
+            case ACTOR_ACTIVITY_SUMMARY ->
+                    es.actorActivitySummary(req.from(), req.to(), req.siteId());
+
+            case TOP_LONGEST_EVENTS -> {
+                int limit = req.limit() == null ? 10 : req.limit();
+                yield es.topLongestEvents(req.from(), req.to(), req.siteId(), limit);
+            }
         };
     }
 }
