@@ -78,6 +78,8 @@ public class KpiServiceImpl implements KpiService {
                 int limit = req.limit() == null ? 10 : req.limit();
                 yield es.topLongestEvents(req.from(), req.to(), req.siteId(), limit);
             }
+            case PEAK_HOUR ->
+                    es.peakHour(req.from(), req.to(), req.siteId());
         };
     }
 }

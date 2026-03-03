@@ -565,6 +565,45 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed TOP_LONGEST_EVENTS KPI", e);
         }
     }
+    public PeakHourDTO peakHour(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildPeakHourQuery(from, to, siteId));
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+                JsonNode buckets = root.path("aggregations").path("per_hour").path("buckets");
+
+                if (buckets.isArray() && buckets.size() > 0) {
+                    JsonNode b = buckets.get(0);
+                    String hour = b.path("key_as_string").asText(null);
+                    long count = b.path("doc_count").asLong(0);
+                    return new PeakHourDTO(hour, count);
+                }
+                return new PeakHourDTO(null, 0);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed PEAK_HOUR KPI", e);
+        }
+    }
+
+    private String buildPeakHourQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"per_hour\":{");
+        sb.append("\"date_histogram\":{");
+        sb.append("\"field\":\"timestamp\",");
+        sb.append("\"fixed_interval\":\"1h\",");
+        sb.append("\"min_doc_count\":0,");
+        sb.append("\"order\":{\"_count\":\"desc\"}");
+        sb.append("}}}}");
+        return sb.toString();
+    }
 
     private String buildTopLongestEventsQuery(Instant from, Instant to, String siteId, int limit) {
         StringBuilder sb = new StringBuilder();
