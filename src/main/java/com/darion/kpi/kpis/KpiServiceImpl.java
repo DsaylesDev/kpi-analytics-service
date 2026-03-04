@@ -80,6 +80,9 @@ public class KpiServiceImpl implements KpiService {
             }
             case PEAK_HOUR ->
                     es.peakHour(req.from(), req.to(), req.siteId());
+
+            case LOWEST_SUCCESS_EVENT_TYPE ->
+                    es.lowestSuccessEventType(req.from(), req.to(), req.siteId());
         };
     }
 }
