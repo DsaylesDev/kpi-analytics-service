@@ -624,7 +624,52 @@ public class EsKpiQueryClient {
             throw new RuntimeException("Failed LOWEST_SUCCESS_EVENT_TYPE KPI", e);
         }
     }
+    public List<EventTypePercentageDTO> eventTypePercentageDistribution(Instant from, Instant to, String siteId) {
+        try {
+            Request req = new Request("POST", "/warehouse_events/_search");
+            req.setJsonEntity(buildEventTypePercentageDistributionQuery(from, to, siteId));
 
+            Response resp = restClient.performRequest(req);
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                JsonNode root = mapper.readTree(is);
+
+                long total = root.path("hits").path("total").path("value").asLong(0);
+                JsonNode buckets = root.path("aggregations").path("by_type").path("buckets");
+
+                List<EventTypePercentageDTO> out = new ArrayList<>();
+
+                if (buckets.isArray()) {
+                    for (JsonNode b : buckets) {
+                        String type = b.path("key").asText(null);
+                        long count = b.path("doc_count").asLong(0);
+                        if (type == null) continue;
+
+                        double pct = total == 0 ? 0.0 : (count * 100.0) / total;
+                        pct = Math.round(pct * 100.0) / 100.0;
+
+                        out.add(new EventTypePercentageDTO(type, pct));
+                    }
+                }
+
+                return out;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed EVENT_TYPE_PERCENTAGE_DISTRIBUTION KPI", e);
+        }
+    }
+
+    private String buildEventTypePercentageDistributionQuery(Instant from, Instant to, String siteId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"size\":0,");
+        sb.append("\"track_total_hits\":true,");
+        sb.append("\"query\":{\"bool\":{\"filter\":[");
+        sb.append(rangeTimestamp(from, to));
+        if (hasText(siteId)) sb.append(",").append(term("siteId", siteId));
+        sb.append("]}},");
+        sb.append("\"aggs\":{\"by_type\":{\"terms\":{\"field\":\"eventType\",\"size\":25,\"order\":{\"_count\":\"desc\"}}}}}");
+        return sb.toString();
+    }
     private String buildLowestSuccessEventTypeQuery(Instant from, Instant to, String siteId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"size\":0,");

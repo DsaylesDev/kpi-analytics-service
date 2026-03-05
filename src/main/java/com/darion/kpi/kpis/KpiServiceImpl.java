@@ -83,6 +83,9 @@ public class KpiServiceImpl implements KpiService {
 
             case LOWEST_SUCCESS_EVENT_TYPE ->
                     es.lowestSuccessEventType(req.from(), req.to(), req.siteId());
+
+            case EVENT_TYPE_PERCENTAGE_DISTRIBUTION ->
+                    es.eventTypePercentageDistribution(req.from(), req.to(), req.siteId());
         };
     }
 }
